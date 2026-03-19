@@ -20,7 +20,7 @@ export function SettingsView({ onBack }) {
     const dir = await window.browser.pickDirectory()
     if (!dir) return
     setMessage('Ejecting...')
-    const result = await window.browser.ejectUI(dir)
+    const result = await window.browser.eject(dir)
     if (result.success) {
       setMessage(`Ejected ${result.fileCount} files. Reloading...`)
       refresh()
@@ -32,7 +32,7 @@ export function SettingsView({ onBack }) {
   const resetToDefault = async () => {
     const result = await window.browser.resetSourceDir()
     if (result.success) {
-      setMessage('Reset to built-in UI. Reloading...')
+      setMessage('Reset to defaults. Reloading...')
       refresh()
     }
   }
@@ -54,6 +54,20 @@ export function SettingsView({ onBack }) {
     }
   }
 
+  const toggleRule = async (i) => {
+    const updated = { ...siteRules, rules: siteRules.rules.map((r, j) =>
+      j === i ? { ...r, enabled: !r.enabled } : r
+    )}
+    await window.browser.saveSiteRules(updated)
+    setSiteRules(updated)
+  }
+
+  const removeRule = async (i) => {
+    const updated = { ...siteRules, rules: siteRules.rules.filter((_, j) => j !== i) }
+    await window.browser.saveSiteRules(updated)
+    setSiteRules(updated)
+  }
+
   if (!settings || !uiPaths) return html`<div class="settings-view"><div class="settings-loading">Loading...</div></div>`
 
   return html`
@@ -68,56 +82,35 @@ export function SettingsView({ onBack }) {
       </div>
 
       <div class="settings-body">
-        <div class="settings-field">
-          <label class="settings-label">Source Directory</label>
-          <p class="settings-hint">Eject the UI source files to a directory you control. Edit them freely — the app will load your version instead of the built-in UI.</p>
-
-          ${uiPaths.isCustom
-            ? html`
-              <div class="settings-value">${settings.source_dir}</div>
-              <div class="settings-actions">
-                <button class="settings-btn" onClick=${() => window.browser.openUIDir()}>Open UI Directory</button>
-                <button class="settings-btn" onClick=${pickAndEject}>Re-eject...</button>
-                <button class="settings-btn" onClick=${resetToDefault}>Reset to Default</button>
-              </div>
-            `
-            : html`
-              <div class="settings-value-default">Using built-in package UI <span class="settings-value-path">${uiPaths.builtin}</span></div>
-              <div class="settings-actions">
-                <button class="settings-btn" onClick=${() => window.browser.openUIDir()}>Open UI Directory</button>
-                <button class="settings-btn settings-btn-primary" onClick=${pickAndEject}>Eject UI...</button>
-              </div>
-            `
-          }
-        </div>
 
         <div class="settings-field">
           <label class="settings-label">Site Rules</label>
-          <p class="settings-hint">Inject custom CSS and JS into sites. Files live in ~/.browser/sites/.</p>
+          <p class="settings-hint">Custom CSS and JS injected into sites by URL pattern.</p>
 
           ${siteRules?.rules?.length > 0
             ? html`
+              <div class="rules-header">
+                <button class="rules-toggle-all" onClick=${async () => {
+                  const allEnabled = siteRules.rules.every(r => r.enabled)
+                  const updated = { ...siteRules, rules: siteRules.rules.map(r => ({ ...r, enabled: !allEnabled })) }
+                  await window.browser.saveSiteRules(updated)
+                  setSiteRules(updated)
+                }}>${siteRules.rules.every(r => r.enabled) ? 'Disable All' : 'Enable All'}</button>
+              </div>
               <ul class="rules-list">
                 ${siteRules.rules.map((rule, i) => html`
-                  <li class="rule-item">
-                    <label class="rule-toggle">
-                      <input type="checkbox" checked=${rule.enabled} onChange=${async () => {
-                        const updated = { ...siteRules, rules: siteRules.rules.map((r, j) =>
-                          j === i ? { ...r, enabled: !r.enabled } : r
-                        )}
-                        await window.browser.saveSiteRules(updated)
-                        setSiteRules(updated)
-                      }} />
+                  <li class="rule-item" onClick=${() => {
+                    const file = (rule.css?.[0] || rule.js?.[0])
+                    if (file) window.browser.openSiteRuleDir(file)
+                  }}>
+                    <label class="rule-toggle" onClick=${e => e.stopPropagation()}>
+                      <input type="checkbox" checked=${rule.enabled} onChange=${() => toggleRule(i)} />
                     </label>
                     <div class="rule-info">
                       <span class="rule-name">${rule.name}</span>
                       <span class="rule-matches">${rule.matches.join(', ')}</span>
                     </div>
-                    <button class="rule-remove" onClick=${async () => {
-                      const updated = { ...siteRules, rules: siteRules.rules.filter((_, j) => j !== i) }
-                      await window.browser.saveSiteRules(updated)
-                      setSiteRules(updated)
-                    }} aria-label="Remove">×</button>
+                    <button class="rule-remove" onClick=${(e) => { e.stopPropagation(); removeRule(i) }} aria-label="Remove">x</button>
                   </li>
                 `)}
               </ul>
@@ -126,23 +119,35 @@ export function SettingsView({ onBack }) {
           }
 
           <div class="settings-actions">
-            <button class="settings-btn settings-btn-primary" onClick=${async () => {
-              const name = 'New Rule'
-              const rule = { name, enabled: true, matches: ['*://example.com/*'], css: [], js: [] }
-              const updated = { ...siteRules, rules: [...(siteRules?.rules || []), rule] }
-              await window.browser.saveSiteRules(updated)
-              setSiteRules(updated)
-              setMessage('Added rule. Edit ~/.browser/sites.json to configure matches and file paths.')
-            }}>Add Rule</button>
             <button class="settings-btn" onClick=${() => window.browser.openSitesDir()}>Open Sites Folder</button>
             <button class="settings-btn" onClick=${() => window.browser.openSitesConfig()}>Edit Config</button>
           </div>
         </div>
 
+        <div class="settings-field">
+          <label class="settings-label">Source Directory</label>
+          <p class="settings-hint">${uiPaths.isCustom
+            ? 'Ejected. The app is loading your customized copy.'
+            : 'Using the built-in package. Eject to customize.'
+          }</p>
+
+          ${uiPaths.isCustom && html`<div class="settings-value">${settings.source_dir}</div>`}
+
+          <div class="settings-actions">
+            <button class="settings-btn" onClick=${() => window.browser.openPath(uiPaths.isCustom ? settings.source_dir : uiPaths.builtin)}>Open</button>
+            ${!uiPaths.isCustom && html`
+              <button class="settings-btn settings-btn-primary" onClick=${pickAndEject}>Eject...</button>
+            `}
+            ${uiPaths.isCustom && html`
+              <button class="settings-btn" onClick=${resetToDefault}>Reset to Default</button>
+            `}
+          </div>
+        </div>
+
         ${updateStatus?.pending && html`
           <div class="settings-field">
-            <label class="settings-label">UI Update Available</label>
-            <p class="settings-hint">The built-in UI has changed since you ejected. Files that you modified will need to be merged.</p>
+            <label class="settings-label">Update Available</label>
+            <p class="settings-hint">Built-in files have changed since you ejected. Files you modified will need merging.</p>
             <ul class="update-file-list">
               ${updateStatus.files.map(f => html`
                 <li class="update-file-item">

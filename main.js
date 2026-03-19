@@ -8,11 +8,10 @@ const yaml = require('js-yaml')
 const DATA_DIR = path.join(require('os').homedir(), '.browser')
 const SETTINGS_PATH = path.join(DATA_DIR, 'settings.yml')
 const HISTORY_PATH = path.join(DATA_DIR, 'history.json')
-const SITES_DIR = path.join(DATA_DIR, 'sites')
-const SITES_CONFIG = path.join(DATA_DIR, 'sites.json')
 const MANIFEST_PATH = path.join(DATA_DIR, 'ui-manifest.json')
 const PENDING_UPDATE_PATH = path.join(DATA_DIR, 'pending-update.yml')
 const BUILTIN_UI = path.join(__dirname, 'ui')
+const BUILTIN_SITES = path.join(__dirname, 'sites')
 
 // ── Settings ───────────────────────────────────────────────────────────────────
 const DEFAULT_SETTINGS_YML = `# ~/.browser/settings.yml
@@ -23,13 +22,13 @@ const DEFAULT_SETTINGS_YML = `# ~/.browser/settings.yml
 # Default search engine ($s = search terms)
 search: https://www.google.com/search?q=$s
 
-# Source directory — eject ui/ here to customize the overlay
-# source_dir: /path/to/my-browser-ui
+# Source directory — eject here to customize the browser
+# Copies both ui/ and sites/ into your directory
+# source_dir: /path/to/my-browser
 `
 
 function ensureDataDir() {
   fs.mkdirSync(DATA_DIR, { recursive: true })
-  fs.mkdirSync(SITES_DIR, { recursive: true })
   if (!fs.existsSync(SETTINGS_PATH)) {
     fs.writeFileSync(SETTINGS_PATH, DEFAULT_SETTINGS_YML)
   }
@@ -71,10 +70,23 @@ function addToHistory(url, title) {
 
 // ── UI resolution chain ────────────────────────────────────────────────────────
 function getUIPath() {
-  if (settings.source_dir && fs.existsSync(path.join(settings.source_dir, 'index.html'))) {
-    return settings.source_dir
+  if (settings.source_dir && fs.existsSync(path.join(settings.source_dir, 'ui', 'index.html'))) {
+    return path.join(settings.source_dir, 'ui')
   }
   return BUILTIN_UI
+}
+
+function getSitesPath() {
+  if (settings.source_dir && fs.existsSync(path.join(settings.source_dir, 'sites'))) {
+    return path.join(settings.source_dir, 'sites')
+  }
+  return BUILTIN_SITES
+}
+
+function getSitesConfigPath() {
+  const custom = path.join(getSitesPath(), 'sites.yaml')
+  if (fs.existsSync(custom)) return custom
+  return path.join(BUILTIN_SITES, 'sites.yaml')
 }
 
 function hashFile(filePath) {
@@ -114,16 +126,17 @@ function checkForUIUpdates() {
   }
   try {
     const manifest = JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf8'))
-    const builtinHashes = walkDir(BUILTIN_UI)
+    const builtinHashes = {
+      ...walkDir(BUILTIN_UI, 'ui'),
+      ...walkDir(BUILTIN_SITES, 'sites'),
+    }
     const files = []
 
-    // Check for modified and added files
     for (const [rel, hash] of Object.entries(builtinHashes)) {
       const manifestHash = manifest.files?.[rel]
       if (!manifestHash) {
         files.push({ path: rel, status: 'added', user_modified: false })
       } else if (hash !== manifestHash) {
-        // Built-in changed since eject — check if user also modified
         const userFile = path.join(settings.source_dir, rel)
         let userModified = false
         if (fs.existsSync(userFile)) {
@@ -133,7 +146,6 @@ function checkForUIUpdates() {
       }
     }
 
-    // Check for deleted files
     for (const rel of Object.keys(manifest.files || {})) {
       if (!builtinHashes[rel]) {
         const userFile = path.join(settings.source_dir, rel)
@@ -155,31 +167,17 @@ function saveSettings(newSettings) {
 }
 
 // ── Site rules (user styles & scripts) ─────────────────────────────────────────
-const DEFAULT_SITES_CONFIG = {
-  rules: [
-    // {
-    //   name: "Example",
-    //   enabled: true,
-    //   matches: ["*://example.com/*"],
-    //   css: ["sites/example/style.css"],
-    //   js: ["sites/example/script.js"]
-    // }
-  ]
-}
-
 function loadSitesConfig() {
   try {
-    if (fs.existsSync(SITES_CONFIG)) {
-      return JSON.parse(fs.readFileSync(SITES_CONFIG, 'utf8'))
-    }
-  } catch {}
-  // Write default on first run
-  fs.writeFileSync(SITES_CONFIG, JSON.stringify(DEFAULT_SITES_CONFIG, null, 2))
-  return DEFAULT_SITES_CONFIG
+    return yaml.load(fs.readFileSync(getSitesConfigPath(), 'utf8')) || { rules: [] }
+  } catch {
+    return { rules: [] }
+  }
 }
 
 function saveSitesConfig(config) {
-  fs.writeFileSync(SITES_CONFIG, JSON.stringify(config, null, 2))
+  const configPath = getSitesConfigPath()
+  fs.writeFileSync(configPath, yaml.dump(config))
 }
 
 function urlMatchesPattern(url, pattern) {
@@ -189,6 +187,17 @@ function urlMatchesPattern(url, pattern) {
   return new RegExp('^' + escaped + '$').test(url)
 }
 
+function resolveSiteFile(relativePath) {
+  // Resolution chain: ejected sites dir -> built-in sites dir
+  if (settings.source_dir) {
+    const custom = path.join(settings.source_dir, relativePath)
+    if (fs.existsSync(custom)) return custom
+  }
+  const builtin = path.join(__dirname, relativePath)
+  if (fs.existsSync(builtin)) return builtin
+  return null
+}
+
 function injectSiteRules(webContents, url) {
   const config = loadSitesConfig()
   for (const rule of config.rules) {
@@ -196,22 +205,20 @@ function injectSiteRules(webContents, url) {
     const matched = rule.matches.some(p => urlMatchesPattern(url, p))
     if (!matched) continue
 
-    // Inject CSS
     if (Array.isArray(rule.css)) {
       for (const cssPath of rule.css) {
-        const full = path.resolve(DATA_DIR, cssPath)
-        if (fs.existsSync(full)) {
+        const full = resolveSiteFile(cssPath)
+        if (full) {
           const css = fs.readFileSync(full, 'utf8')
           webContents.insertCSS(css).catch(() => {})
         }
       }
     }
 
-    // Inject JS in the main world
     if (Array.isArray(rule.js)) {
       for (const jsPath of rule.js) {
-        const full = path.resolve(DATA_DIR, jsPath)
-        if (fs.existsSync(full)) {
+        const full = resolveSiteFile(jsPath)
+        if (full) {
           const code = fs.readFileSync(full, 'utf8')
           webContents.executeJavaScript(code).catch(() => {})
         }
@@ -538,21 +545,25 @@ ipcMain.handle('pick-directory', async () => {
   return result.filePaths[0]
 })
 
-ipcMain.handle('eject-ui', (e, targetDir) => {
+ipcMain.handle('eject', (e, targetDir) => {
   try {
-    copyDirRecursive(BUILTIN_UI, targetDir)
+    // Copy both ui/ and sites/ into the target directory
+    copyDirRecursive(BUILTIN_UI, path.join(targetDir, 'ui'))
+    copyDirRecursive(BUILTIN_SITES, path.join(targetDir, 'sites'))
     // Write manifest recording built-in hashes at eject time
-    const hashes = walkDir(BUILTIN_UI)
+    const uiHashes = walkDir(BUILTIN_UI, 'ui')
+    const sitesHashes = walkDir(BUILTIN_SITES, 'sites')
+    const allHashes = { ...uiHashes, ...sitesHashes }
     const manifest = {
       ejected_at: new Date().toISOString(),
       builtin_version: require('./package.json').version,
-      files: hashes,
+      files: allHashes,
     }
     fs.writeFileSync(MANIFEST_PATH, JSON.stringify(manifest, null, 2))
     // Update settings
     settings.source_dir = targetDir
     saveSettings(settings)
-    return { success: true, fileCount: Object.keys(hashes).length }
+    return { success: true, fileCount: Object.keys(allHashes).length }
   } catch (err) {
     return { success: false, error: err.message }
   }
@@ -575,7 +586,7 @@ ipcMain.handle('prepare-update', () => {
 
 ipcMain.handle('finalize-update', () => {
   try {
-    const hashes = walkDir(BUILTIN_UI)
+    const hashes = { ...walkDir(BUILTIN_UI, 'ui'), ...walkDir(BUILTIN_SITES, 'sites') }
     const manifest = {
       ejected_at: new Date().toISOString(),
       builtin_version: require('./package.json').version,
@@ -596,15 +607,20 @@ ipcMain.handle('save-site-rules', (_e, config) => {
   return { success: true }
 })
 
+ipcMain.handle('open-site-rule-dir', (_e, filePath) => {
+  const { shell } = require('electron')
+  const dir = path.dirname(path.resolve(getSitesPath(), '..', filePath))
+  shell.openPath(dir)
+})
+
 ipcMain.handle('open-sites-config', () => {
   const { shell } = require('electron')
-  shell.openPath(SITES_CONFIG)
+  shell.showItemInFolder(getSitesConfigPath())
 })
 
 ipcMain.handle('open-sites-dir', () => {
   const { shell } = require('electron')
-  fs.mkdirSync(SITES_DIR, { recursive: true })
-  shell.openPath(SITES_DIR)
+  shell.openPath(getSitesPath())
 })
 
 ipcMain.handle('open-path', (_e, p) => {
@@ -632,15 +648,6 @@ ipcMain.handle('get-ui-paths', () => ({
   active: getUIPath(),
   isCustom: !!settings.source_dir,
 }))
-
-ipcMain.handle('open-ui-dir', () => {
-  const { shell } = require('electron')
-  if (settings.source_dir && fs.existsSync(settings.source_dir)) {
-    shell.openPath(settings.source_dir)
-  }
-  // Always open the built-in too so user can compare
-  shell.openPath(BUILTIN_UI)
-})
 
 // ── Catch-all: redirect any new window into a tab ─────────────────────────────
 app.on('web-contents-created', (_event, contents) => {
