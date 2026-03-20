@@ -407,10 +407,24 @@ function createTab(state, url) {
     notifyUI(state)
   })
 
-  if (url) view.webContents.loadURL(url)
-
-  switchToTab(state, id)
-  showOverlayIfBlank(state)
+  if (url) {
+    view.webContents.loadURL(url)
+    // Switch without showing overlay since page is loading
+    state.activeTabId = id
+    for (const t of state.tabs) t.view.setVisible(t.id === id)
+    fitView(state, view)
+    notifyUI(state)
+    // Hide overlay if it was open
+    if (state.overlayView) {
+      state.overlayView.setBounds({ x: 0, y: 0, width: 0, height: 0 })
+      state.win.setWindowButtonPosition({ x: -20, y: -20 })
+      state.overlayView.webContents.send('hide-overlay')
+      view.webContents.focus()
+    }
+  } else {
+    switchToTab(state, id)
+    showOverlayIfBlank(state)
+  }
   return id
 }
 
@@ -510,12 +524,12 @@ let toastTimers = new WeakMap()
 
 function showToast(state, msg) {
   if (!state?.overlayView || !state.win) return
-  // Position a small overlay region in the bottom-right for the toast
+  // Position a small overlay region in the bottom-left for the toast
   const bounds = state.win.contentView.getBounds()
-  const toastW = 200, toastH = 50
+  const toastW = 250, toastH = 64
   state.overlayView.setBounds({
-    x: 16,
-    y: bounds.height - toastH - 16,
+    x: 0,
+    y: bounds.height - toastH,
     width: toastW,
     height: toastH,
   })
@@ -810,6 +824,32 @@ app.whenReady().then(() => {
       ],
     },
     { role: 'editMenu' },
+    {
+      label: 'View',
+      submenu: [
+        {
+          label: 'Address Bar',
+          accelerator: 'CmdOrCtrl+K',
+          click: () => {
+            const state = focusedState()
+            if (state?.overlayView) state.overlayView.webContents.send('toggle-overlay')
+          },
+        },
+        {
+          label: 'Settings',
+          accelerator: 'CmdOrCtrl+,',
+          click: () => {
+            const state = focusedState()
+            if (state?.overlayView) {
+              fitOverlay(state)
+              state.overlayView.webContents.focus()
+              state.win.setWindowButtonPosition({ x: 12, y: 12 })
+              state.overlayView.webContents.send('show-settings')
+            }
+          },
+        },
+      ],
+    },
   ]))
   ensureDataDir()
   settings = loadSettings()

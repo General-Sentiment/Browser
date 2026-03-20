@@ -11,12 +11,12 @@ contextBridge.exposeInMainWorld('browser', {
   getHistory: ()    => ipcRenderer.invoke('get-history'),
 
   setOverlayVisible: (v) => ipcRenderer.invoke('set-overlay-visible', v),
-  onToggleOverlay: (cb) => ipcRenderer.on('toggle-overlay', cb),
-  onShowOverlay:   (cb) => ipcRenderer.on('show-overlay', cb),
-  onHideOverlay:   (cb) => ipcRenderer.on('hide-overlay', cb),
-  onStateUpdate:   (cb) => ipcRenderer.on('state-update', (_e, state) => cb(state)),
-  onToast:         (cb) => ipcRenderer.on('show-toast', (_e, msg) => cb(msg)),
-  onShowSettings:  (cb) => ipcRenderer.on('show-settings', cb),
+  onToggleOverlay: (cb) => { ipcRenderer.removeAllListeners('toggle-overlay'); ipcRenderer.on('toggle-overlay', cb) },
+  onShowOverlay:   (cb) => { ipcRenderer.removeAllListeners('show-overlay'); ipcRenderer.on('show-overlay', cb) },
+  onHideOverlay:   (cb) => { ipcRenderer.removeAllListeners('hide-overlay'); ipcRenderer.on('hide-overlay', cb) },
+  onStateUpdate:   (cb) => { ipcRenderer.removeAllListeners('state-update'); ipcRenderer.on('state-update', (_e, state) => cb(state)) },
+  onToast:         (cb) => { ipcRenderer.removeAllListeners('show-toast'); ipcRenderer.on('show-toast', (_e, msg) => cb(msg)) },
+  onShowSettings:  (cb) => { ipcRenderer.removeAllListeners('show-settings'); ipcRenderer.on('show-settings', cb) },
 
   getSettings:     ()    => ipcRenderer.invoke('get-settings'),
   saveSettings:    (s)   => ipcRenderer.invoke('save-settings', s),

@@ -328,7 +328,7 @@ body {
   color: var(--text-bright);
 }
 
-.settings-body { padding: 1rem; }
+.settings-body { padding: 1rem; max-width: var(--overlay-width); width: 100%; margin: 0 auto; }
 .settings-divider { border: none; border-top: 0.0625rem solid var(--border); margin: 0.75rem 0; }
 
 .settings-field { margin-bottom: 1.25rem; }
@@ -426,6 +426,32 @@ body {
   line-height: 1.4;
 }
 
+.settings-footer {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+  padding: 2rem 0 1rem;
+  margin-top: 0.75rem;
+  border-top: 0.0625rem solid var(--border);
+}
+.settings-footer-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-decoration: none;
+}
+.settings-footer-title:hover { color: var(--text-bright); }
+.settings-footer-credit {
+  font-size: var(--text-small);
+  color: var(--text-dim);
+}
+.settings-footer-credit a {
+  color: var(--text-dim);
+  text-decoration: none;
+}
+.settings-footer-credit a:hover { color: var(--text-bright); }
+
 .settings-loading {
   padding: 2rem;
   text-align: center;
@@ -464,7 +490,7 @@ body {
   align-items: center;
   gap: 0.5rem;
   height: 3rem;
-  padding: 0.5rem 1rem;
+  padding: 0.5rem 1rem 0.5rem 0.5rem;
   background: var(--surface);
   border: none;
   border-radius: 999rem;
@@ -473,10 +499,26 @@ body {
   color: var(--text-bright);
 }
 .rule-item:hover { background: var(--surface-hover); }
+.rule-item.disabled .rule-name { color: var(--text-dim); }
 
-.rule-toggle input {
-  margin: 0;
+.rule-check {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  border: 0.0625rem solid var(--text);
+  opacity: 0.15;
+  background: none;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 0;
+}
+.rule-check.checked {
+  opacity: 1;
+  border-color: var(--text-bright);
+  color: var(--text-bright);
 }
 
 .rule-info {
@@ -578,7 +620,7 @@ body {
   background: var(--overlay-bg);
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
-  box-shadow: 0 0 0 0.0625rem oklch(0.5 0 0 / 0.25);
+  box-shadow: 0 0 0 0.0625rem oklch(0.5 0 0 / 0.15);
   color: var(--text);
   font-size: 1rem;
   padding: 0 1rem;

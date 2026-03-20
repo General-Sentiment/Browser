@@ -85,6 +85,7 @@ export function SettingsView({ onBack }) {
 
         <div class="settings-field">
           <label class="settings-label">Appearance</label>
+          <p class="settings-hint">Choose a color mode for the interface.</p>
           <div class="settings-segmented">
             ${['system', 'light', 'dark'].map(mode => html`
               <button
@@ -109,13 +110,17 @@ export function SettingsView({ onBack }) {
             ? html`
               <ul class="rules-list">
                 ${siteRules.rules.map((rule, i) => html`
-                  <li class="rule-item" onClick=${() => {
+                  <li class="rule-item ${rule.enabled ? '' : 'disabled'}" onClick=${() => {
                     const file = (rule.css?.[0] || rule.js?.[0])
                     if (file) window.browser.openSiteRuleDir(file)
                   }}>
-                    <label class="rule-toggle" onClick=${e => e.stopPropagation()}>
-                      <input type="checkbox" checked=${rule.enabled} onChange=${() => toggleRule(i)} />
-                    </label>
+                    <button class="rule-check ${rule.enabled ? 'checked' : ''}" onClick=${e => { e.stopPropagation(); toggleRule(i) }} aria-label="Toggle rule">
+                      ${rule.enabled && html`
+                        <svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor">
+                          <path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clip-rule="evenodd" />
+                        </svg>
+                      `}
+                    </button>
                     <span class="rule-info">
                       <span class="rule-name">${rule.name}</span>
                       <span class="rule-matches">${rule.matches.join(', ')}</span>
@@ -144,7 +149,7 @@ export function SettingsView({ onBack }) {
           <label class="settings-label">Source Directory</label>
           <p class="settings-hint">${uiPaths.isCustom
             ? 'Ejected. The app is loading your customized copy.'
-            : 'Using the built-in package. Eject to customize.'
+            : 'Eject to copy the UI and site rules to a directory you control. Edit the files directly or open the folder in Claude Code. Want a feature? Ask for it. Unhappy with something? Ask for it to be changed.'
           }</p>
 
           ${uiPaths.isCustom && html`<div class="settings-value">${settings.source_dir}</div>`}
@@ -152,7 +157,7 @@ export function SettingsView({ onBack }) {
           <div class="settings-actions">
             <button class="settings-btn" onClick=${() => window.browser.openPath(uiPaths.isCustom ? settings.source_dir : uiPaths.builtin)}>Open</button>
             ${!uiPaths.isCustom && html`
-              <button class="settings-btn settings-btn-primary" onClick=${pickAndEject}>Eject...</button>
+              <button class="settings-btn settings-btn-primary" onClick=${pickAndEject}>Eject</button>
             `}
             ${uiPaths.isCustom && html`
               <button class="settings-btn" onClick=${resetToDefault}>Reset to Default</button>
@@ -181,6 +186,11 @@ export function SettingsView({ onBack }) {
         `}
 
         ${message && html`<div class="settings-message">${message}</div>`}
+
+        <div class="settings-footer">
+          <a class="settings-footer-title" onClick=${(e) => { e.preventDefault(); window.browser.navigate('https://generalsentiment.co/browser'); onBack() }}>General Browser</a>
+          <span class="settings-footer-credit">by <a onClick=${(e) => { e.preventDefault(); window.browser.navigate('https://generalsentiment.co'); onBack() }}>General Sentiment</a></span>
+        </div>
       </div>
     </div>
   `

@@ -84,9 +84,12 @@ function App() {
       window.browser.setOverlayVisible(true)
     })
     window.browser.onToast((msg) => {
-      setToast(msg)
-      clearTimeout(toastTimer.current)
-      toastTimer.current = setTimeout(() => setToast(null), 2000)
+      setToast(null)
+      setTimeout(() => {
+        setToast(msg)
+        clearTimeout(toastTimer.current)
+        toastTimer.current = setTimeout(() => setToast(null), 2000)
+      }, 10)
     })
   }, [])
 
