@@ -376,6 +376,7 @@ function createTab(state, url) {
   const view = new WebContentsView({
     webPreferences: { contextIsolation: true, sandbox: true },
   })
+  view.setBackgroundColor(nativeTheme.shouldUseDarkColors ? '#000000' : '#ffffff')
   state.win.contentView.addChildView(view)
   fitView(state, view)
   if (state.overlayView) state.win.contentView.addChildView(state.overlayView)

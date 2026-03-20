@@ -188,8 +188,8 @@ export function SettingsView({ onBack }) {
         ${message && html`<div class="settings-message">${message}</div>`}
 
         <div class="settings-footer">
-          <a class="settings-footer-title" onClick=${(e) => { e.preventDefault(); window.browser.navigate('https://generalsentiment.co/browser'); onBack() }}>General Browser</a>
-          <span class="settings-footer-credit">by <a onClick=${(e) => { e.preventDefault(); window.browser.navigate('https://generalsentiment.co'); onBack() }}>General Sentiment</a></span>
+          <a class="settings-footer-title" onClick=${(e) => { e.preventDefault(); window.browser.newTab('https://generalsentiment.co/browser'); onBack() }}>General Browser</a>
+          <span class="settings-footer-credit">by <a onClick=${(e) => { e.preventDefault(); window.browser.newTab('https://generalsentiment.co'); onBack() }}>General Sentiment</a></span>
         </div>
       </div>
     </div>
