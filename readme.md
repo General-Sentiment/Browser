@@ -4,6 +4,8 @@ A lightweight Electron browser with no interface. Pages fill the entire window. 
 
 Deeply inspired by [Oryoki](https://github.com/thmsbfft/oryoki), which proved that a browser could be reduced to almost nothing and still be everything you need.
 
+**macOS only for now.**
+
 ## Usage
 
 ```
