@@ -32,5 +32,14 @@ contextBridge.exposeInMainWorld('browser', {
   openSitesDir:    ()    => ipcRenderer.invoke('open-sites-dir'),
   openPath:        (p)   => ipcRenderer.invoke('open-path', p),
   resetSourceDir:  ()    => ipcRenderer.invoke('reset-source-dir'),
+  isDefaultBrowser: ()   => ipcRenderer.invoke('is-default-browser'),
+  setDefaultBrowser: ()  => ipcRenderer.invoke('set-default-browser'),
   getUIPaths:      ()    => ipcRenderer.invoke('get-ui-paths'),
+
+  // App (shell) auto-update
+  checkForAppUpdate:  () => ipcRenderer.invoke('check-for-app-update'),
+  downloadAppUpdate:  () => ipcRenderer.invoke('download-app-update'),
+  installAppUpdate:   () => ipcRenderer.invoke('install-app-update'),
+  getAppVersion:      () => ipcRenderer.invoke('get-app-version'),
+  isDevMode:          () => ipcRenderer.invoke('is-dev-mode'),
 })

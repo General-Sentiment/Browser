@@ -5,7 +5,7 @@
   /* ── Light mode (default) ─────────────────────────────────────────────── */
   --bg: oklch(1 0 0);
   --overlay-bg: oklch(0.97 0 0);
-  --overlay-backdrop: oklch(0.4 0 0 / 0.9);
+  --overlay-backdrop: oklch(100% 0 0 / 0.95);
   --border: oklch(0.85 0 0);
   --surface: oklch(0.25 0 0 / 0.06);
   --surface-hover: oklch(0.25 0 0 / 0.1);
@@ -178,16 +178,20 @@ body {
 .tab.empty { color: var(--text-dim); }
 .tab.active:hover { background: var(--surface-active); }
 .tab:not(.active):hover { background: var(--surface-hover); }
+.tab:focus-visible { outline: 1px solid #fff; outline-offset: -1px; }
 
 .tab-favicon-wrap {
   position: relative;
   width: 2rem;
   height: 2rem;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .tab-favicon {
-  width: 2rem;
-  height: 2rem;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   display: block;
 }
@@ -218,13 +222,13 @@ body {
 
 .settings-gear {
   position: fixed;
-  top: 0.75rem;
+  top: 0.625rem;
   right: 0.75rem;
   background: none;
   border: none;
   color: var(--text-muted);
   cursor: pointer;
-  padding: 0.375rem;
+  padding: 0.25rem;
   display: flex;
   align-items: center;
   z-index: 1;
@@ -303,15 +307,21 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  position: relative;
+  position: sticky;
+  top: 0;
+  z-index: 5;
   padding: 0.75rem 1rem;
   border-bottom: 0.0625rem solid var(--border);
+  background: var(--overlay-backdrop);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
 }
 
 .settings-close {
-  position: fixed;
-  top: 0.75rem;
+  position: absolute;
   right: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
   background: none;
   border: none;
   color: var(--text-dim);
@@ -323,12 +333,28 @@ body {
 .settings-close:hover { color: var(--text-bright); }
 
 .settings-title {
-  font-size: 1rem;
+  font-size: var(--text-small);
   font-weight: 600;
-  color: var(--text-bright);
+  color: var(--text-dim);
 }
 
 .settings-body { padding: 1rem; max-width: var(--overlay-width); width: 100%; margin: 0 auto; }
+
+.settings-update-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 1rem;
+  border-radius: 0.5rem;
+  background: var(--surface-active);
+}
+.settings-update-text {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-bright);
+}
+.settings-update-banner .settings-btn { font-size: 0.75rem; padding: 0.25rem 0.625rem; }
 .settings-divider { border: none; border-top: 0.0625rem solid var(--border); margin: 0.75rem 0; }
 
 .settings-field { margin-bottom: 1.25rem; }
@@ -376,7 +402,8 @@ body {
   background: var(--surface);
   border: none;
   color: var(--text);
-  padding: 0.375rem 0.75rem;
+  height: 2.5rem;
+  padding: 0 1rem;
   border-radius: 999rem;
   font-size: 1rem;
   cursor: pointer;
@@ -440,6 +467,7 @@ body {
   font-weight: 600;
   color: var(--text-dim);
   text-decoration: none;
+  cursor: pointer;
 }
 .settings-footer-title:hover { color: var(--text-bright); }
 .settings-footer-credit {
@@ -449,8 +477,23 @@ body {
 .settings-footer-credit a {
   color: var(--text-dim);
   text-decoration: none;
+  cursor: pointer;
 }
 .settings-footer-credit a:hover { color: var(--text-bright); }
+.settings-footer-version {
+  font-size: var(--text-small);
+  color: var(--text-dim);
+}
+
+.dev-tools-group {
+  margin-bottom: 0.75rem;
+}
+.dev-tools-label {
+  display: block;
+  font-size: var(--text-small);
+  color: var(--text-dim);
+  margin-bottom: 0.375rem;
+}
 
 .settings-loading {
   padding: 2rem;

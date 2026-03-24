@@ -168,6 +168,8 @@ function App() {
   useEffect(() => {
     if (domainMatch && filteredHistory.length > 0) {
       setSelectedIdx(0)
+    } else {
+      setSelectedIdx(-1)
     }
   }, [domainMatch, filteredHistory.length])
 
@@ -253,7 +255,7 @@ function App() {
                     type="text"
                     placeholder="Search or enter a URL..."
                     value=${query}
-                    onInput=${e => { setQuery(e.target.value); setSelectedIdx(-1) }}
+                    onInput=${e => { setQuery(e.target.value) }}
                     onKeyDown=${onKeyDown}
                     role="combobox"
                     aria-expanded=${filteredHistory.length > 0}

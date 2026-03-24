@@ -1,8 +1,44 @@
-const { app, BrowserWindow, WebContentsView, ipcMain, dialog, nativeTheme, Menu } = require('electron')
+const { app, BrowserWindow, WebContentsView, ipcMain, dialog, nativeTheme, Menu, shell } = require('electron')
+const { autoUpdater } = require('electron-updater')
 const path = require('path')
 const fs = require('fs')
 const crypto = require('crypto')
 const yaml = require('js-yaml')
+
+// ── Protocol registration (for open-url events when already default) ────────
+// Does NOT prompt the user or steal default browser status — just registers
+// the app so macOS delivers open-url events if the user has already chosen it.
+if (!process.defaultApp) {
+  app.setAsDefaultProtocolClient('http')
+  app.setAsDefaultProtocolClient('https')
+}
+
+// Buffer for URLs received before the app is ready
+let pendingUrl = null
+
+// macOS: open-url fires when the OS asks us to handle a URL
+app.on('open-url', (event, url) => {
+  event.preventDefault()
+  if (!app.isReady()) {
+    pendingUrl = url
+    return
+  }
+  openUrlInBrowser(url)
+})
+
+function openUrlInBrowser(url) {
+  const state = focusedState() || (windows.size > 0 ? windows.values().next().value : null)
+  if (state) {
+    createTab(state, url)
+    state.win.show()
+    state.win.focus()
+  } else {
+    const newState = openNewWindow()
+    // Replace the default home tab with the requested URL
+    const tab = newState.tabs[0]
+    if (tab) tab.view.webContents.loadURL(url)
+  }
+}
 
 // ── Paths ──────────────────────────────────────────────────────────────────────
 const DATA_DIR = path.join(require('os').homedir(), '.browser')
@@ -307,6 +343,7 @@ function createWindowState() {
     titleBarOverlay: false,
     windowButtonPosition: { x: -20, y: -20 },
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#000' : '#fff',
+    icon: path.join(__dirname, 'build', 'icon.png'),
   })
 
   state.overlayView = new WebContentsView({
@@ -376,7 +413,7 @@ function createTab(state, url) {
   const view = new WebContentsView({
     webPreferences: { contextIsolation: true, sandbox: true },
   })
-  view.setBackgroundColor(nativeTheme.shouldUseDarkColors ? '#000000' : '#ffffff')
+  view.setBackgroundColor('#ffffff')
   state.win.contentView.addChildView(view)
   fitView(state, view)
   if (state.overlayView) state.win.contentView.addChildView(state.overlayView)
@@ -744,6 +781,37 @@ ipcMain.handle('finalize-update', () => {
   }
 })
 
+// ── App (shell) auto-update IPC ──────────────────────────────────────────────
+ipcMain.handle('check-for-app-update', async () => {
+  try {
+    const result = await autoUpdater.checkForUpdates()
+    if (!result?.updateInfo) return { available: false }
+    return {
+      available: result.updateInfo.version !== app.getVersion(),
+      version: result.updateInfo.version,
+      currentVersion: app.getVersion(),
+    }
+  } catch (err) {
+    return { available: false, error: err.message }
+  }
+})
+
+ipcMain.handle('download-app-update', async () => {
+  try {
+    await autoUpdater.downloadUpdate()
+    return { success: true }
+  } catch (err) {
+    return { success: false, error: err.message }
+  }
+})
+
+ipcMain.handle('install-app-update', () => {
+  autoUpdater.quitAndInstall(false, true)
+})
+
+ipcMain.handle('get-app-version', () => app.getVersion())
+ipcMain.handle('is-dev-mode', () => !app.isPackaged)
+
 ipcMain.handle('get-site-rules', () => loadSitesConfig())
 
 ipcMain.handle('save-site-rules', (_e, config) => {
@@ -751,25 +819,27 @@ ipcMain.handle('save-site-rules', (_e, config) => {
   return { success: true }
 })
 
+// In packaged builds, paths inside the .asar can't be opened by the OS.
+// Resolve to the .asar.unpacked equivalent when needed.
+function resolveForShell(p) {
+  return p.replace(/\.asar([\\/])/, '.asar.unpacked$1')
+}
+
 ipcMain.handle('open-site-rule-dir', (_e, filePath) => {
-  const { shell } = require('electron')
   const dir = path.dirname(path.resolve(getSitesPath(), '..', filePath))
-  shell.openPath(dir)
+  shell.openPath(resolveForShell(dir))
 })
 
 ipcMain.handle('open-sites-config', () => {
-  const { shell } = require('electron')
-  shell.showItemInFolder(getSitesConfigPath())
+  shell.showItemInFolder(resolveForShell(getSitesConfigPath()))
 })
 
 ipcMain.handle('open-sites-dir', () => {
-  const { shell } = require('electron')
-  shell.openPath(getSitesPath())
+  shell.openPath(resolveForShell(getSitesPath()))
 })
 
 ipcMain.handle('open-path', (_e, p) => {
-  const { shell } = require('electron')
-  shell.openPath(p)
+  shell.openPath(resolveForShell(p))
 })
 
 ipcMain.handle('reset-source-dir', () => {
@@ -783,6 +853,18 @@ ipcMain.handle('reset-source-dir', () => {
     if (state.overlayView) {
       state.overlayView.webContents.loadFile(path.join(BUILTIN_UI, 'index.html'))
     }
+  }
+  return { success: true }
+})
+
+ipcMain.handle('is-default-browser', () => {
+  return app.isDefaultProtocolClient('https')
+})
+
+ipcMain.handle('set-default-browser', () => {
+  if (process.platform === 'darwin') {
+    // On macOS, open the Default Browser system preference pane
+    shell.openExternal('x-apple.systempreferences:com.apple.Desktop-Settings.extension?Defaults')
   }
   return { success: true }
 })
@@ -857,6 +939,25 @@ app.whenReady().then(() => {
   history = loadHistory()
   applyColorMode()
   openNewWindow()
+
+  // Handle any URL that arrived before the app was ready
+  if (pendingUrl) {
+    openUrlInBrowser(pendingUrl)
+    pendingUrl = null
+  }
+
+  // ── Auto-update (shell updates via GitHub Releases) ───────────────────────────
+  autoUpdater.autoDownload = false
+  autoUpdater.autoInstallOnAppQuit = false
+  autoUpdater.logger = null
+
+  autoUpdater.on('error', (err) => {
+    console.error('Auto-update error:', err)
+  })
+
+  // Check on launch, then every 4 hours
+  autoUpdater.checkForUpdates().catch(() => {})
+  setInterval(() => autoUpdater.checkForUpdates().catch(() => {}), 4 * 60 * 60 * 1000)
 })
 
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit() })

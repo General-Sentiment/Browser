@@ -5,13 +5,23 @@ export function SettingsView({ onBack }) {
   const [uiPaths, setUIPaths] = useState(null)
   const [updateStatus, setUpdateStatus] = useState(null)
   const [siteRules, setSiteRules] = useState(null)
+  const [isDefault, setIsDefault] = useState(null)
   const [message, setMessage] = useState('')
+  const [appUpdate, setAppUpdate] = useState(null) // { available, version, downloading, ready }
+  const [appVersion, setAppVersion] = useState('')
+  const [devMode, setDevMode] = useState(false)
 
   function refresh() {
     window.browser.getSettings().then(setSettings)
     window.browser.getUIPaths().then(setUIPaths)
     window.browser.getUpdateStatus().then(setUpdateStatus)
     window.browser.getSiteRules().then(setSiteRules)
+    window.browser.isDefaultBrowser().then(setIsDefault)
+    window.browser.getAppVersion().then(setAppVersion)
+    window.browser.isDevMode().then(setDevMode)
+    window.browser.checkForAppUpdate().then(r => {
+      if (r.available) setAppUpdate({ available: true, version: r.version })
+    })
   }
 
   useEffect(() => { refresh() }, [])
@@ -83,6 +93,21 @@ export function SettingsView({ onBack }) {
 
       <div class="settings-body">
 
+        ${appUpdate?.available && html`
+          <div class="settings-update-banner">
+            <span class="settings-update-text">v${appUpdate.version} is available</span>
+            ${appUpdate.ready
+              ? html`<button class="settings-btn settings-btn-primary" onClick=${() => window.browser.installAppUpdate()}>Restart to Update</button>`
+              : html`<button class="settings-btn settings-btn-primary" disabled=${appUpdate.downloading} onClick=${async () => {
+                  setAppUpdate(u => ({ ...u, downloading: true }))
+                  const result = await window.browser.downloadAppUpdate()
+                  if (result.success) setAppUpdate(u => ({ ...u, downloading: false, ready: true }))
+                  else setAppUpdate(u => ({ ...u, downloading: false }))
+                }}>${appUpdate.downloading ? 'Downloading...' : 'Update'}</button>`
+            }
+          </div>
+        `}
+
         <div class="settings-field">
           <label class="settings-label">Appearance</label>
           <p class="settings-hint">Choose a color mode for the interface.</p>
@@ -97,49 +122,6 @@ export function SettingsView({ onBack }) {
                 }}
               >${mode}</button>
             `)}
-          </div>
-        </div>
-
-        <hr class="settings-divider" />
-
-        <div class="settings-field">
-          <label class="settings-label">Site Rules</label>
-          <p class="settings-hint">Custom CSS and JS injected into sites by URL pattern.</p>
-
-          ${siteRules?.rules?.length > 0
-            ? html`
-              <ul class="rules-list">
-                ${siteRules.rules.map((rule, i) => html`
-                  <li class="rule-item ${rule.enabled ? '' : 'disabled'}" onClick=${() => {
-                    const file = (rule.css?.[0] || rule.js?.[0])
-                    if (file) window.browser.openSiteRuleDir(file)
-                  }}>
-                    <button class="rule-check ${rule.enabled ? 'checked' : ''}" onClick=${e => { e.stopPropagation(); toggleRule(i) }} aria-label="Toggle rule">
-                      ${rule.enabled && html`
-                        <svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor">
-                          <path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clip-rule="evenodd" />
-                        </svg>
-                      `}
-                    </button>
-                    <span class="rule-info">
-                      <span class="rule-name">${rule.name}</span>
-                      <span class="rule-matches">${rule.matches.join(', ')}</span>
-                    </span>
-                    <span class="rule-remove" onClick=${(e) => { e.stopPropagation(); removeRule(i) }} aria-label="Remove">
-                      <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
-                        <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
-                      </svg>
-                    </span>
-                  </li>
-                `)}
-              </ul>
-            `
-            : html`<div class="settings-value-default">No site rules configured</div>`
-          }
-
-          <div class="settings-actions">
-            <button class="settings-btn" onClick=${() => window.browser.openSitesDir()}>Open Sites Folder</button>
-            <button class="settings-btn" onClick=${() => window.browser.openSitesConfig()}>Edit Config</button>
           </div>
         </div>
 
@@ -187,9 +169,134 @@ export function SettingsView({ onBack }) {
 
         ${message && html`<div class="settings-message">${message}</div>`}
 
+        <hr class="settings-divider" />
+
+        <div class="settings-field">
+          <label class="settings-label">Default Browser</label>
+          <p class="settings-hint">${isDefault
+            ? 'This is your default browser. Links from other apps will open here.'
+            : 'Set as default to open links from other apps in this browser.'
+          }</p>
+          <div class="settings-actions">
+            ${isDefault
+              ? html`<button class="settings-btn" disabled>Default</button>`
+              : html`<button class="settings-btn settings-btn-primary" onClick=${async () => {
+                  await window.browser.setDefaultBrowser()
+                  setTimeout(() => window.browser.isDefaultBrowser().then(setIsDefault), 1000)
+                }}>Set as Default</button>`
+            }
+          </div>
+        </div>
+
+        <hr class="settings-divider" />
+
+        <div class="settings-field">
+          <label class="settings-label">Site Rules</label>
+          <p class="settings-hint">Custom CSS and JS injected into sites by URL pattern.</p>
+
+          ${siteRules?.rules?.length > 0
+            ? html`
+              <ul class="rules-list">
+                ${siteRules.rules.map((rule, i) => html`
+                  <li class="rule-item ${rule.enabled ? '' : 'disabled'}" onClick=${() => {
+                    const file = (rule.css?.[0] || rule.js?.[0])
+                    if (file) window.browser.openSiteRuleDir(file)
+                  }}>
+                    <button class="rule-check ${rule.enabled ? 'checked' : ''}" onClick=${e => { e.stopPropagation(); toggleRule(i) }} aria-label="Toggle rule">
+                      ${rule.enabled && html`
+                        <svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor">
+                          <path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clip-rule="evenodd" />
+                        </svg>
+                      `}
+                    </button>
+                    <span class="rule-info">
+                      <span class="rule-name">${rule.name}</span>
+                      <span class="rule-matches">${rule.matches.join(', ')}</span>
+                    </span>
+                    <span class="rule-remove" onClick=${(e) => { e.stopPropagation(); removeRule(i) }} aria-label="Remove">
+                      <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
+                      </svg>
+                    </span>
+                  </li>
+                `)}
+              </ul>
+            `
+            : html`<div class="settings-value-default">No site rules configured</div>`
+          }
+
+          <div class="settings-actions">
+            <button class="settings-btn" onClick=${() => window.browser.openSitesDir()}>Open Sites Folder</button>
+            <button class="settings-btn" onClick=${() => window.browser.openSitesConfig()}>Edit Config</button>
+          </div>
+        </div>
+
+        ${devMode && html`
+          <hr class="settings-divider" />
+
+          <div class="settings-field dev-tools">
+            <label class="settings-label">Dev Tools</label>
+            <p class="settings-hint">Preview UI states. These overrides are local to this session.</p>
+
+            <div class="dev-tools-group">
+              <span class="dev-tools-label">App Update Banner</span>
+              <div class="settings-segmented">
+                ${[
+                  ['Hidden', () => setAppUpdate(null)],
+                  ['Available', () => setAppUpdate({ available: true, version: '1.0.0' })],
+                  ['Downloading', () => setAppUpdate({ available: true, version: '1.0.0', downloading: true })],
+                  ['Ready', () => setAppUpdate({ available: true, version: '1.0.0', ready: true })],
+                ].map(([label, action]) => html`
+                  <button class="settings-segment ${
+                    label === 'Hidden' && !appUpdate?.available ? 'active' :
+                    label === 'Available' && appUpdate?.available && !appUpdate?.downloading && !appUpdate?.ready ? 'active' :
+                    label === 'Downloading' && appUpdate?.downloading ? 'active' :
+                    label === 'Ready' && appUpdate?.ready ? 'active' : ''
+                  }" onClick=${action}>${label}</button>
+                `)}
+              </div>
+            </div>
+
+            <div class="dev-tools-group">
+              <span class="dev-tools-label">UI Update Status</span>
+              <div class="settings-segmented">
+                ${[
+                  ['None', () => setUpdateStatus({ pending: false })],
+                  ['Pending', () => setUpdateStatus({ pending: true, files: [
+                    { path: 'ui/app.js', status: 'changed', user_modified: false },
+                    { path: 'ui/style.css', status: 'changed', user_modified: true },
+                    { path: 'ui/components/toast.js', status: 'added', user_modified: false },
+                  ]})],
+                ].map(([label, action]) => html`
+                  <button class="settings-segment ${
+                    label === 'None' && !updateStatus?.pending ? 'active' :
+                    label === 'Pending' && updateStatus?.pending ? 'active' : ''
+                  }" onClick=${action}>${label}</button>
+                `)}
+              </div>
+            </div>
+
+            <div class="dev-tools-group">
+              <span class="dev-tools-label">Default Browser</span>
+              <div class="settings-segmented">
+                ${[
+                  ['Yes', () => setIsDefault(true)],
+                  ['No', () => setIsDefault(false)],
+                ].map(([label, action]) => html`
+                  <button class="settings-segment ${
+                    label === 'Yes' && isDefault ? 'active' :
+                    label === 'No' && !isDefault ? 'active' : ''
+                  }" onClick=${action}>${label}</button>
+                `)}
+              </div>
+            </div>
+          </div>
+        `}
+
         <div class="settings-footer">
           <a class="settings-footer-title" onClick=${(e) => { e.preventDefault(); window.browser.newTab('https://generalsentiment.co/browser'); onBack() }}>General Browser</a>
           <span class="settings-footer-credit">by <a onClick=${(e) => { e.preventDefault(); window.browser.newTab('https://generalsentiment.co'); onBack() }}>General Sentiment</a></span>
+          ${appVersion && html`<span class="settings-footer-version">v${appVersion}</span>`}
         </div>
       </div>
     </div>
