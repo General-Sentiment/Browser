@@ -1,10 +1,18 @@
 # General Browser
 
-A lightweight Electron browser with no interface. Pages fill the entire window. All controls live behind a single Cmd+K overlay: address bar, tabs, history.
+An ultralight minimal browser with (basically) no interface. Pages fill the entire window. All controls live behind a single Cmd+K overlay: address bar, tabs, history.
 
 Deeply inspired by [Oryoki](https://github.com/thmsbfft/oryoki), which proved that a browser could be reduced to almost nothing and still be everything you need.
 
 **macOS only for now.**
+
+## Philosophy
+
+The entire source ships inside the app. There is no build step, no bundler, no transpiler. The code you see is the code that runs. You can open the source files and edit them directly.
+
+Site rules let you inject your own CSS and JS into any page. Instead of reaching for a separate ad blocker or extension, you intervene directly: hide what you don't want, restyle what you do, add behavior where it's missing. The browser is just a thin shell around your preferences.
+
+When the app updates, your modifications don't get overwritten. An LLM-assisted merge reconciles upstream changes with whatever you've done to the source. The codebase evolves like a living thing. Upstream improvements graft onto your local mutations, and the result is software that is partly the thing that was shipped and partly the thing you made it into.
 
 ## Usage
 
@@ -30,10 +38,6 @@ Cmd+K (or Cmd+L) opens the overlay. Type a URL or search query, press Enter. Esc
 ## Settings
 
 All configuration lives in `~/.browser/settings.yml`, created on first run.
-
-```yaml
-search: https://www.google.com/search?q=$s
-```
 
 ## Site Rules
 
