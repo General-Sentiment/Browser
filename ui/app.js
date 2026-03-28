@@ -19,6 +19,7 @@ function App() {
   const viewRef = useRef('main')
   const setView = (v) => { viewRef.current = v; _setView(v) }
   const [toast, setToast] = useState(null)
+  const [toastAction, setToastAction] = useState(null)
   const toastTimer = useRef(null)
   const inputRef = useRef(null)
   const listRef = useRef(null)
@@ -85,11 +86,26 @@ function App() {
     })
     window.browser.onToast((msg) => {
       setToast(null)
+      setToastAction(null)
       setTimeout(() => {
         setToast(msg)
         clearTimeout(toastTimer.current)
         toastTimer.current = setTimeout(() => setToast(null), 2000)
       }, 10)
+    })
+    window.browser.onSourceChanged(() => {
+      setToast('Reload')
+      setToastAction(() => () => {
+        window.browser.reloadUI(viewRef.current)
+      })
+      clearTimeout(toastTimer.current)
+    })
+    window.browser.onRestoreView((v) => {
+      if (v === 'settings') {
+        setVisible(true)
+        setView('settings')
+        window.browser.setOverlayVisible(true)
+      }
     })
   }, [])
 
@@ -230,7 +246,7 @@ function App() {
   }, [filteredHistory, selectedIdx, query, submit, blankTab, dismissAndNavigate])
 
   return html`
-    <${Toast} message=${toast} />
+    <${Toast} message=${toast} onClick=${toastAction} />
     ${!visible ? null : html`
     <div class="overlay-backdrop" onClick=${hideOverlay}>
       <div class="overlay" onClick=${e => e.stopPropagation()}>

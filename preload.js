@@ -17,6 +17,9 @@ contextBridge.exposeInMainWorld('browser', {
   onStateUpdate:   (cb) => { ipcRenderer.removeAllListeners('state-update'); ipcRenderer.on('state-update', (_e, state) => cb(state)) },
   onToast:         (cb) => { ipcRenderer.removeAllListeners('show-toast'); ipcRenderer.on('show-toast', (_e, msg) => cb(msg)) },
   onShowSettings:  (cb) => { ipcRenderer.removeAllListeners('show-settings'); ipcRenderer.on('show-settings', cb) },
+  onSourceChanged: (cb) => { ipcRenderer.removeAllListeners('source-changed'); ipcRenderer.on('source-changed', cb) },
+  onRestoreView:   (cb) => { ipcRenderer.removeAllListeners('restore-view'); ipcRenderer.on('restore-view', (_e, view) => cb(view)) },
+  reloadUI:        (restoreView) => ipcRenderer.invoke('reload-ui', restoreView),
 
   getSettings:     ()    => ipcRenderer.invoke('get-settings'),
   saveSettings:    (s)   => ipcRenderer.invoke('save-settings', s),

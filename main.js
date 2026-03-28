@@ -348,7 +348,7 @@ function createWindowState() {
     titleBarOverlay: false,
     windowButtonPosition: { x: -20, y: -20 },
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#000' : '#fff',
-    icon: path.join(__dirname, 'build', 'icon.png'),
+    icon: path.join(__dirname, 'assets', 'icon.png'),
   })
 
   state.overlayView = new WebContentsView({
@@ -567,11 +567,11 @@ let toastTimers = new WeakMap()
 
 function showToast(state, msg) {
   if (!state?.overlayView || !state.win) return
-  // Position a small overlay region in the bottom-left for the toast
+  // Position a small overlay region in the bottom-right for the toast
   const bounds = state.win.contentView.getBounds()
   const toastW = 250, toastH = 64
   state.overlayView.setBounds({
-    x: 0,
+    x: bounds.width - toastW,
     y: bounds.height - toastH,
     width: toastW,
     height: toastH,
@@ -657,6 +657,15 @@ ipcMain.handle('get-tabs', (e) => {
 })
 
 ipcMain.handle('get-history', () => history)
+
+ipcMain.handle('reload-ui', (e, restoreView) => {
+  const state = stateFromEvent(e)
+  if (!state?.overlayView) return
+  state.overlayView.webContents.once('did-finish-load', () => {
+    if (restoreView) state.overlayView.webContents.send('restore-view', restoreView)
+  })
+  state.overlayView.webContents.loadFile(path.join(getUIPath(), 'index.html'))
+})
 
 ipcMain.handle('set-overlay-visible', (e, visible) => {
   const state = stateFromEvent(e)
@@ -925,9 +934,20 @@ function startWatchers() {
       const watcher = fs.watch(dir, { recursive: true }, debounce(() => {
         if (type === 'ui') {
           for (const state of windows.values()) {
-            if (state.overlayView) {
-              state.overlayView.webContents.loadFile(path.join(getUIPath(), 'index.html'))
+            if (!state.overlayView) continue
+            // If the overlay isn't fully shown, position a small region for the toast
+            const winBounds = state.win.contentView.getBounds()
+            const cur = state.overlayView.getBounds()
+            if (cur.width < winBounds.width) {
+              const toastW = 250, toastH = 64
+              state.overlayView.setBounds({
+                x: winBounds.width - toastW,
+                y: winBounds.height - toastH,
+                width: toastW,
+                height: toastH,
+              })
             }
+            state.overlayView.webContents.send('source-changed')
           }
         } else {
           // sites changed — re-inject CSS/JS on all active tabs

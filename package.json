@@ -21,6 +21,7 @@
     "appId": "com.browser.app",
     "productName": "Browser",
     "directories": {
+      "buildResources": "assets",
       "output": "dist"
     },
     "files": [
